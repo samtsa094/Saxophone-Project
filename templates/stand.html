@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session_metadata.title }} | Saxophone Session Copilot{% endblock %}
+
+{% block content %}
+  <p class="eyebrow">{{ session_metadata.status }} session</p>
+  <h1>{{ session_metadata.title }}</h1>
+  <p class="muted">Session ID: {{ session_metadata.id }}</p>
+
+  {% if session_metadata.processing_notice %}
+    <p class="warning" role="status">{{ session_metadata.processing_notice }}</p>
+  {% endif %}
+
+  <p id="range-alert" class="warning" role="status" {% if not score_data.warnings %}hidden{% endif %}>
+    <span id="range-alert-count">{{ score_data.summary_stats.range_warnings_generated }}</span>
+    adjusted notes across
+    <span id="range-alert-phrases">
+      {{ score_data.summary_stats.phrases_shifted_up + score_data.summary_stats.phrases_shifted_down }}
+    </span>
+    phrases. Open Range warnings to jump to a change.
+  </p>
+
+  <section class="card stand-card" aria-labelledby="score-heading">
+    <div class="stand-heading">
+      <div>
+        <h2 id="score-heading">Digital music stand</h2>
+        <p id="score-summary" class="muted">
+          {{ score_data.summary_stats.total_notes }} notes · {{ score_data.bpm }} BPM
+        </p>
+        <p id="playback-status" class="muted" role="status" aria-live="polite"></p>
+      </div>
+      <button id="play-toggle" type="button" aria-pressed="false">Play</button>
+      <button id="range-warning-open" type="button" {% if not score_data.warnings %}disabled{% endif %}>
+        Range warnings ({{ score_data.summary_stats.range_warnings_generated }})
+      </button>
+    </div>
+
+    {% if score_data.tracks %}
+      <div id="voice-switcher" class="stand-controls" role="tablist" aria-label="Score voice">
+        {% for track_id, label in score_data.track_labels.items() %}
+          {% if score_data.tracks.get(track_id) and score_data.tracks[track_id].processed_notes %}
+            <button
+              class="voice-tab"
+              type="button"
+              role="tab"
+              data-track-id="{{ track_id }}"
+              aria-selected="{{ 'true' if score_data.selected_track == track_id else 'false' }}"
+            >{{ label }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="stand-controls" aria-label="Playback controls">
+      <label for="tempo-scale">Playback speed</label>
+      <select id="tempo-scale">
+        <option value="0.5">0.5×</option>
+        <option value="0.75">0.75×</option>
+        <option value="1" selected>1.0×</option>
+        <option value="1.25">1.25×</option>
+        <option value="1.5">1.5×</option>
+      </select>
+      <label for="metronome-enabled">
+        <input id="metronome-enabled" type="checkbox">
+        Metronome
+      </label>
+    </div>
+    <p class="muted" id="pitch-mode">
+      Playback uses the source concert pitches. The notation is written for
+      {{ score_data.profile.horn_type }} (+{{ score_data.profile.transposition_semitones }} semitones).
+    </p>
+
+    <div id="score-viewport" class="score-viewport" tabindex="0" aria-label="Scrollable sheet music">
+      <div id="notation-canvas" class="score-canvas">
+        <div id="timeline-cursor" class="timeline-cursor" hidden></div>
+      </div>
+    </div>
+
+    <details class="range-summary">
+      <summary>Range and processing details</summary>
+      <p class="muted">
+        <span id="adjusted-notes-count">{{ score_data.summary_stats.range_warnings_generated }}</span> note adjustments applied.
+        Source: {{ score_data.source }}. Estimated key signature: {{ score_data.key_signature or "not enough notes to estimate" }}.
+      </p>
+      {% if score_data.detection_stats %}
+        <p id="detection-summary" class="muted">
+          Detected {{ score_data.detection_stats.raw_notes }} raw notes;
+          {{ score_data.detection_stats.lead_notes }} lead and
+          {{ score_data.detection_stats.harmony_notes }} harmony notes after cleanup.
+        </p>
+      {% endif %}
+      <ul id="range-details-list" {% if not score_data.warnings %}hidden{% endif %}>
+        {% for warning in score_data.warnings %}
+          <li>{{ warning.message }}</li>
+        {% endfor %}
+      </ul>
+      <p id="range-details-none" class="muted" {% if score_data.warnings %}hidden{% endif %}>
+        No range adjustments were needed.
+      </p>
+    </details>
+  </section>
+
+  <dialog id="range-warning-dialog" class="range-dialog" aria-labelledby="range-warning-heading">
+    <h2 id="range-warning-heading">Range adjustments</h2>
+    <ul id="range-warning-list" {% if not score_data.warnings %}hidden{% endif %}>
+    {% if score_data.warnings %}
+      {% for warning in score_data.warnings %}
+        <li>{{ warning.message }}</li>
+      {% endfor %}
+    {% endif %}
+    </ul>
+    <p id="range-warning-none" {% if score_data.warnings %}hidden{% endif %}>No range adjustments were needed.</p>
+    <form method="dialog">
+      <button type="submit">Close</button>
+    </form>
+  </dialog>
+
+  <script>
+    const globalScoreData = {{ score_data | tojson }};
+    const globalGenreStyle = {{ session_metadata.genre_style | tojson }};
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js" defer></script>
+  <script src="{{ url_for('static', filename='js/engraver.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/audio_stand.js') }}" defer></script>
+{% endblock %}

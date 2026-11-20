@@ -1,0 +1,3 @@
+1. Cannot handle multi-lined music very well
+2. Sometimes audio files can't be fetched
+3. Come up with better way to deal with range warnings

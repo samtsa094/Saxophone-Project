@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Profile | Saxophone Session Copilot{% endblock %}
+
+{% block content %}
+  <p class="eyebrow">Dashboard</p>
+  <h1>Your saxophone profile</h1>
+  <p class="muted">Set your instrument and playing level to tailor your score.</p>
+
+  <section class="card" aria-labelledby="profile-heading">
+    <h2 id="profile-heading">Instrument settings</h2>
+    {% if error %}
+      <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+    <form action="{{ url_for('dashboard') }}" method="post">
+      <div class="field">
+        <label for="horn-type">Saxophone</label>
+        <select id="horn-type" name="horn_type" required>
+          {% for horn_type in horn_types %}
+            <option value="{{ horn_type }}" {% if session.horn_type == horn_type %}selected{% endif %}>{{ horn_type }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <fieldset>
+        <legend>Playing level</legend>
+        <div class="radio-options">
+          {% for skill_level in skill_levels %}
+            <label>
+              <input type="radio" name="skill_level" value="{{ skill_level }}" {% if session.skill_level == skill_level %}checked{% endif %} required>
+              {{ skill_level }}
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label id="low-a-option" class="checkbox-label" for="has-low-a" {% if session.horn_type != "Baritone" %}hidden{% endif %}>
+          <input id="has-low-a" type="checkbox" name="has_low_a" {% if session.has_low_a %}checked{% endif %} {% if session.horn_type != "Baritone" %}disabled{% endif %}>
+          Instrument has a low A key
+        </label>
+      </div>
+
+      <div class="field">
+        <label id="altissimo-option" class="checkbox-label" for="altissimo-enabled" {% if session.skill_level != "Advanced" %}hidden{% endif %}>
+          <input id="altissimo-enabled" type="checkbox" name="altissimo_enabled" {% if session.altissimo_enabled %}checked{% endif %} {% if session.skill_level != "Advanced" %}disabled{% endif %}>
+          Enable altissimo range
+        </label>
+        <p class="muted">Available for advanced players; raises the score ceiling to MIDI 96.</p>
+      </div>
+
+      <button type="submit">Save profile</button>
+    </form>
+  </section>
+
+  <script>
+    const hornType = document.getElementById("horn-type");
+    const skillLevels = document.querySelectorAll('input[name="skill_level"]');
+    const lowAOption = document.getElementById("low-a-option");
+    const lowAInput = document.getElementById("has-low-a");
+    const altissimoOption = document.getElementById("altissimo-option");
+    const altissimoInput = document.getElementById("altissimo-enabled");
+
+    function updateOptionalSettings() {
+      const selectedSkill = document.querySelector('input[name="skill_level"]:checked');
+      const isBaritone = hornType.value === "Baritone";
+      const isAdvanced = selectedSkill && selectedSkill.value === "Advanced";
+      lowAOption.hidden = !isBaritone;
+      lowAInput.disabled = !isBaritone;
+      altissimoOption.hidden = !isAdvanced;
+      altissimoInput.disabled = !isAdvanced;
+    }
+
+    hornType.addEventListener("change", updateOptionalSettings);
+    skillLevels.forEach((input) => input.addEventListener("change", updateOptionalSettings));
+    updateOptionalSettings();
+  </script>
+{% endblock %}

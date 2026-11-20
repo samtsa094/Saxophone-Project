@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Upload | Saxophone Session Copilot{% endblock %}
+
+{% block content %}
+  <p class="eyebrow">Audio ingestion</p>
+  <h1>Prepare a session</h1>
+  <p class="muted">Upload audio or MIDI to build a score for your saxophone profile.</p>
+
+  <section class="card upload-panel" aria-labelledby="upload-heading">
+    <h2 id="upload-heading">Session audio</h2>
+    <dl class="metadata">
+      <div>
+        <dt>Instrument</dt>
+        <dd>{{ session.horn_type }}</dd>
+      </div>
+      <div>
+        <dt>Playing level</dt>
+        <dd>{{ session.skill_level }}</dd>
+      </div>
+      <div>
+        <dt>Low A key</dt>
+        <dd>{{ "Yes" if session.has_low_a else "No" }}</dd>
+      </div>
+      <div>
+        <dt>Altissimo</dt>
+        <dd>{{ "Enabled" if session.altissimo_enabled else "Disabled" }}</dd>
+      </div>
+    </dl>
+
+    <form id="upload-form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+      <div class="field">
+        <label for="audio-file">
+          Audio or MIDI file (MP3, WAV, M4A, FLAC, OGG, AAC, AIFF, OPUS,
+          WMA, or MIDI; 25 MB max)
+        </label>
+        <input
+          class="file-input"
+          id="audio-file"
+          name="audio_file"
+          type="file"
+          accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.aiff,.aif,.opus,.wma,.mid,.midi"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label for="voice-preference">Voice extraction target</label>
+        <select id="voice-preference" name="voice_preference" required>
+          <option value="lead" {% if selected_voice == "lead" %}selected{% endif %}>
+            Top Lead Line (Vocals / Main Melody)
+          </option>
+          <option value="harmony" {% if selected_voice == "harmony" %}selected{% endif %}>
+            Mid-Voice / Counter-melody
+          </option>
+          <option value="all_voices" {% if selected_voice == "all_voices" %}selected{% endif %}>
+            Full Polyphony (Raw)
+          </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="enable-stem-separation">
+          <input id="enable-stem-separation" name="enable_stem_separation" type="checkbox">
+          Pre-filter melodic frequency range
+        </label>
+        <p class="muted">
+          Recommended for busy mixes. Applies a 150-3500 Hz band-pass filter;
+          this fallback reduces bass and cymbal energy but does not fully separate stems.
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="genre-style">Target musical style</label>
+        <select id="genre-style" name="genre_style" required>
+          {% for style in musical_styles %}
+            <option value="{{ style }}" {% if selected_style == style %}selected{% endif %}>{{ style }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button id="submit-upload" type="submit">Prepare session</button>
+    </form>
+
+    <dialog id="upload-progress" class="range-dialog upload-progress" aria-labelledby="progress-heading">
+      <h2 id="progress-heading">Preparing your session</h2>
+      <p id="progress-step">Queued for processing.</p>
+      <progress id="progress-value" max="100" value="0">0%</progress>
+      <p id="progress-error" class="error" hidden></p>
+      <button id="close-progress" type="button" hidden>Close</button>
+    </dialog>
+  </section>
+
+  <script>
+    const uploadForm = document.getElementById("upload-form");
+    const submitButton = document.getElementById("submit-upload");
+    const progressPanel = document.getElementById("upload-progress");
+    const progressStep = document.getElementById("progress-step");
+    const progressValue = document.getElementById("progress-value");
+    const progressError = document.getElementById("progress-error");
+    const closeProgress = document.getElementById("close-progress");
+
+    async function pollTask(statusUrl) {
+      const response = await fetch(statusUrl, { headers: { Accept: "application/json" } });
+      const status = await response.json();
+      if (!response.ok) {
+        throw new Error(status.error || "Could not read processing status.");
+      }
+
+      progressStep.textContent = status.step;
+      progressValue.value = status.progress;
+      if (status.status === "completed") {
+        window.location.assign(status.session_url);
+        return;
+      }
+      if (status.status === "failed") {
+        throw new Error(status.error || "Audio processing failed.");
+      }
+      window.setTimeout(() => pollTask(statusUrl).catch(showUploadError), 700);
+    }
+
+    function showUploadError(error) {
+      progressError.textContent = error.message;
+      progressError.hidden = false;
+      progressStep.textContent = "Unable to prepare this session.";
+      submitButton.disabled = false;
+      closeProgress.hidden = false;
+    }
+
+    uploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      submitButton.disabled = true;
+      if (typeof progressPanel.showModal === "function") {
+        progressPanel.showModal();
+      } else {
+        progressPanel.setAttribute("open", "");
+      }
+      progressError.hidden = true;
+      closeProgress.hidden = true;
+      progressStep.textContent = "Uploading audio...";
+
+      try {
+        const response = await fetch(uploadForm.action, {
+          method: "POST",
+          body: new FormData(uploadForm),
+          headers: { Accept: "application/json" },
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "The upload could not be accepted.");
+        }
+        pollTask(result.status_url).catch(showUploadError);
+      } catch (error) {
+        showUploadError(error);
+      }
+    });
+
+    closeProgress.addEventListener("click", () => progressPanel.close());
+  </script>
+{% endblock %}

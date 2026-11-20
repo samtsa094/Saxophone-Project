@@ -1,0 +1,4 @@
+cd "D:\Saxophone Project"
+.\.venv\Scripts\Activate.ps1
+$env:APP_ENV = "development"
+python app.py

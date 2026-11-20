@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Saxophone Session Copilot{% endblock %}</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --background: #0B0F19;
+        --surface: #111827;
+        --surface-raised: #172033;
+        --text: #E5E7EB;
+        --muted: #9CA3AF;
+        --accent: #4F46E5;
+        --accent-hover: #6366F1;
+        --border: #273244;
+        --danger: #FCA5A5;
+        --warning: #F59E0B;
+      }
+
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background: var(--background);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      a { color: inherit; }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        padding: 2rem 1.25rem;
+        border-right: 1px solid var(--border);
+        background: #0D1320;
+      }
+
+      .brand {
+        margin: 0 0 2rem;
+        font-size: 1.05rem;
+        letter-spacing: 0.02em;
+      }
+
+      .nav-links {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .nav-links a {
+        padding: 0.7rem 0.8rem;
+        border-radius: 0.5rem;
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        background: var(--surface-raised);
+        color: var(--text);
+        outline: none;
+      }
+
+      main {
+        width: 100%;
+        max-width: 1100px;
+        min-width: 0;
+        margin: 0 auto;
+        padding: clamp(1.5rem, 5vw, 4rem);
+      }
+
+      .eyebrow {
+        margin: 0 0 0.5rem;
+        color: #A5B4FC;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 { margin-top: 0; line-height: 1.2; }
+
+      .card {
+        max-width: 680px;
+        padding: clamp(1.25rem, 4vw, 2rem);
+        border: 1px solid var(--border);
+        border-radius: 0.9rem;
+        background: var(--surface);
+      }
+
+      .field { margin: 1.25rem 0; }
+      .field > label,
+      legend { display: block; margin-bottom: 0.5rem; font-weight: 650; }
+
+      select,
+      button {
+        min-height: 2.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        font: inherit;
+      }
+
+      select {
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        background: var(--background);
+        color: var(--text);
+      }
+
+      fieldset { margin: 1.25rem 0; padding: 0; border: 0; }
+
+      .radio-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+      }
+
+      .radio-options label,
+      .checkbox-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+
+      input { accent-color: var(--accent); }
+
+      button {
+        padding: 0.65rem 1rem;
+        border-color: transparent;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      button:hover { background: var(--accent-hover); }
+      button:focus-visible, select:focus-visible, input:focus-visible {
+        outline: 2px solid #A5B4FC;
+        outline-offset: 3px;
+      }
+
+      .error {
+        margin: 0 0 1rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #7F1D1D;
+        border-radius: 0.5rem;
+        background: #2A151B;
+        color: var(--danger);
+      }
+
+      .notice {
+        margin: 0 0 1rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #3730A3;
+        border-radius: 0.5rem;
+        background: #17163A;
+        color: #C7D2FE;
+      }
+
+      .warning {
+        margin: 0 0 1rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #92400E;
+        border-radius: 0.5rem;
+        background: #2A2112;
+        color: #FCD34D;
+      }
+
+      .muted { color: var(--muted); }
+      .metadata { display: grid; gap: 0.85rem; }
+      .metadata dt { color: var(--muted); font-size: 0.9rem; }
+      .metadata dd { margin: 0.15rem 0 0; overflow-wrap: anywhere; }
+
+      .upload-panel { position: relative; }
+
+      .file-input {
+        display: block;
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px dashed #596579;
+        border-radius: 0.5rem;
+        background: var(--background);
+        color: var(--text);
+      }
+
+      button:disabled { cursor: wait; opacity: 0.7; }
+
+      .upload-progress[open] { display: grid; gap: 0.75rem; }
+      .upload-progress progress { width: 100%; accent-color: var(--accent); }
+
+      .stand-card { max-width: none; }
+      .stand-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+      .stand-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.25rem 0;
+      }
+      .stand-controls label { display: inline-flex; align-items: center; gap: 0.5rem; }
+      .stand-controls select { width: auto; min-width: 6rem; }
+      .score-viewport {
+        max-height: 70vh;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        background: #F8FAFC;
+        scroll-behavior: smooth;
+      }
+      .score-canvas {
+        position: relative;
+        min-height: 190px;
+        color: #111827;
+      }
+      .score-canvas svg { display: block; }
+      .timeline-cursor {
+        position: absolute;
+        z-index: 2;
+        top: 24px;
+        width: 2px;
+        height: 118px;
+        background: #EF4444;
+        opacity: 0.8;
+        pointer-events: none;
+        transform: translateX(-1px);
+      }
+      .timeline-cursor[hidden] { display: none; }
+      .score-warning-note { fill: var(--warning) !important; }
+      .score-altissimo-note { fill: #7C3AED !important; }
+      .score-active-note { filter: drop-shadow(0 0 3px #4F46E5); }
+      .score-range-focus { filter: drop-shadow(0 0 6px #F59E0B); }
+      #range-warning-list li, #range-details-list li { cursor: pointer; }
+      #range-warning-list li:focus-visible, #range-details-list li:focus-visible {
+        outline: 2px solid #F59E0B;
+        outline-offset: 3px;
+      }
+      .score-label {
+        position: absolute;
+        z-index: 1;
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.25rem;
+        background: #111827;
+        color: #F8FAFC;
+        font-size: 0.7rem;
+        white-space: nowrap;
+      }
+      .range-summary { margin-top: 1rem; }
+      .range-summary summary { cursor: pointer; font-weight: 650; }
+      .range-summary ul { padding-left: 1.25rem; }
+      .range-summary li { margin: 0.35rem 0; }
+      .score-empty { padding: 2rem; color: #374151; }
+      .range-dialog {
+        width: min(36rem, calc(100vw - 2rem));
+        max-height: min(80vh, 40rem);
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 0.9rem;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .range-dialog::backdrop { background: rgb(0 0 0 / 70%); }
+
+      @media (max-width: 680px) {
+        .app-shell { grid-template-columns: 1fr; }
+        .sidebar {
+          padding: 1rem;
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+        .brand { margin-bottom: 0.75rem; }
+        .nav-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .nav-links a { padding: 0.55rem; text-align: center; }
+        main { padding: 1.5rem 1rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <p class="brand"><strong>Saxophone Copilot</strong></p>
+        <nav class="nav-links" aria-label="Main navigation">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('upload') }}">Upload</a>
+          <a href="{{ url_for('session_view', session_id=demo_session_id) }}">Demo Stand</a>
+        </nav>
+      </aside>
+      <main id="main-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>
