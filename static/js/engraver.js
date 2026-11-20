@@ -2,8 +2,11 @@
   const PITCH_CLASSES = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"];
   const DURATION_SLOTS = [
     { slots: 16, vex: "w" },
+    { slots: 12, vex: "hd" },
     { slots: 8, vex: "h" },
+    { slots: 6, vex: "qd" },
     { slots: 4, vex: "q" },
+    { slots: 3, vex: "8d" },
     { slots: 2, vex: "8" },
     { slots: 1, vex: "16" },
   ];
@@ -307,9 +310,11 @@
           const ref = {
             id: scoreEvent.id,
             pitch: scoreEvent.pitch,
-            playbackPitch: typeof scoreEvent.original_pitch === "number"
-              ? scoreEvent.original_pitch
-              : scoreEvent.pitch,
+            playbackPitch: typeof scoreEvent.playbackPitch === "number"
+              ? scoreEvent.playbackPitch
+              : (typeof scoreEvent.original_pitch === "number"
+                ? scoreEvent.original_pitch
+                : scoreEvent.pitch),
             start: scoreEvent.start,
             duration: scoreEvent.duration,
             x: vexNote.getAbsoluteX(),
@@ -408,6 +413,7 @@
     );
     window.scoreRenderData = {
       notes: noteAnchors,
+      tiedSegments: [...segmentsByEvent.values()].flat(),
       totalDuration,
       width,
       lineCount,

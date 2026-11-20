@@ -1,6 +1,7 @@
 """Lightweight melodic-band pre-filtering for uploaded audio."""
 
 import os
+import importlib.util
 import uuid
 
 
@@ -13,6 +14,35 @@ def isolate_melodic_stem(
     use. This fallback reduces low-frequency bass/drum energy and high cymbal
     noise; it does not perform true source separation.
     """
+    if importlib.util.find_spec("demucs") is not None:
+        try:
+            import subprocess
+            import sys
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "demucs",
+                    "--two-stems",
+                    "vocals",
+                    "-n",
+                    "htdemucs",
+                    "-o",
+                    output_dir,
+                    audio_path,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            stem_name = os.path.splitext(os.path.basename(audio_path))[0]
+            candidate = os.path.join(output_dir, "htdemucs", stem_name, "vocals.wav")
+            if os.path.isfile(candidate):
+                return candidate, "Demucs htdemucs vocals stem"
+        except (subprocess.SubprocessError, OSError):
+            pass
+
     import librosa
     import numpy as np
     import soundfile

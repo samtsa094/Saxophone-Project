@@ -68,7 +68,7 @@ class ProcessMelodyDataTests(unittest.TestCase):
         )
         self.assertEqual(altissimo_high["processed_notes"][0]["pitch"], 96)
 
-    def test_quantizes_start_and_duration_to_sixteenth_grid(self) -> None:
+    def test_quantizes_start_and_duration_to_eighth_grid_by_default(self) -> None:
         result = process_melody_data(
             [event(60, start=0.13, duration=0.13)],
             "Alto",
@@ -78,9 +78,23 @@ class ProcessMelodyDataTests(unittest.TestCase):
         )
 
         processed = result["processed_notes"][0]
+        self.assertEqual(processed["start"], 0.25)
+        self.assertEqual(processed["duration"], 0.25)
+        self.assertEqual(result["bpm"], 120.0)
+
+    def test_sixteenth_grid_is_available_for_complex_rhythm(self) -> None:
+        result = process_melody_data(
+            [event(60, start=0.13, duration=0.13)],
+            "Alto",
+            "Intermediate",
+            False,
+            bpm=120,
+            quantization_grid="sixteenth",
+        )
+
+        processed = result["processed_notes"][0]
         self.assertEqual(processed["start"], 0.125)
         self.assertEqual(processed["duration"], 0.125)
-        self.assertEqual(result["bpm"], 120.0)
 
     def test_summary_counts_notes_shifts_and_warnings(self) -> None:
         result = process_melody_data(

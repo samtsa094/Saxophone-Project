@@ -18,6 +18,7 @@ class ApplicationRoutesTests(unittest.TestCase):
             enable_stem_separation: bool = False,
             minimum_frequency: float = 80.0,
             maximum_frequency: float = 3500.0,
+            **_kwargs,
         ):
             self.transcription_calls += 1
             self.transcription_options.append(
@@ -216,6 +217,7 @@ class ApplicationRoutesTests(unittest.TestCase):
             enable_stem_separation: bool = False,
             minimum_frequency: float = 80.0,
             maximum_frequency: float = 3500.0,
+            **_kwargs,
         ):
             self.transcription_options.append(
                 (enable_stem_separation, minimum_frequency, maximum_frequency)

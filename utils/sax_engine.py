@@ -49,6 +49,7 @@ def process_melody_data(
     altissimo_enabled: bool = False,
     bpm: float = 120.0,
     enforce_range: bool = True,
+    quantization_grid: str = "eighth",
 ) -> dict[str, Any]:
     """Transpose and quantize notes, optionally applying saxophone range limits."""
     if horn_type not in TRANSPOSITION_SEMITONES:
@@ -59,6 +60,8 @@ def process_melody_data(
         raise TypeError("Instrument range settings must be bool values.")
     if not isinstance(enforce_range, bool):
         raise TypeError("enforce_range must be a bool.")
+    if quantization_grid not in {"eighth", "sixteenth"}:
+        raise ValueError("quantization_grid must be 'eighth' or 'sixteenth'.")
     if (
         not isinstance(bpm, Real)
         or isinstance(bpm, bool)
@@ -80,7 +83,8 @@ def process_melody_data(
         else 89
     )
     interval = TRANSPOSITION_SEMITONES[horn_type]
-    grid_seconds = 60.0 / float(bpm) * SIXTEENTH_NOTE
+    grid_fraction = SIXTEENTH_NOTE if quantization_grid == "sixteenth" else 0.5
+    grid_seconds = 60.0 / float(bpm) * grid_fraction
     validated_events: list[dict[str, Any]] = []
 
     for index, event in enumerate(note_events):

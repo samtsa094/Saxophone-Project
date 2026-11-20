@@ -61,15 +61,27 @@
     scheduledNodes.push(oscillator);
   }
 
-  function scheduleMetronome(context, startTime, totalDuration, speed) {
+  function scheduleMetronome(context, startTime, playbackPosition, totalDuration, speed) {
     if (!metronomeToggle.checked) {
       return;
     }
-    const beatSeconds = window.scoreRenderData.beatSeconds / speed;
-    for (let beat = 0; beat * beatSeconds < totalDuration / speed; beat += 1) {
+    const beatSeconds = window.scoreRenderData.beatSeconds;
+    const tolerance = 1e-6;
+    const firstBeat = Math.max(
+      0,
+      playbackPosition < tolerance
+        ? 0
+        : Math.floor(playbackPosition / beatSeconds)
+          + (Math.abs(playbackPosition % beatSeconds) < tolerance ? 0 : 1)
+    );
+    for (let beat = firstBeat; beat * beatSeconds < totalDuration; beat += 1) {
       const click = context.createOscillator();
       const gain = context.createGain();
-      const clickTime = startTime + beat * beatSeconds;
+      const offset = Math.max(
+        0,
+        beat * beatSeconds - playbackPosition
+      );
+      const clickTime = startTime + offset / speed;
       click.frequency.value = beat % 4 === 0 ? 1200 : 850;
       gain.gain.setValueAtTime(0.08, clickTime);
       gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.035);
@@ -98,15 +110,30 @@
     scheduleMetronome(
       context,
       startTime,
-      window.scoreRenderData.totalDuration - playbackPosition,
+      playbackPosition,
+      window.scoreRenderData.totalDuration,
       speed
     );
     playbackStartTime = startTime - playbackPosition / speed;
   }
 
   function setActiveNote(note) {
-    const activeElement = note ? note.element : null;
-    for (const renderedNote of window.scoreRenderData.notes) {
+    let activeElement = note ? note.element : null;
+    if (note) {
+      const activeSegment = (window.scoreRenderData.tiedSegments || []).find(
+        (segment) =>
+          segment.id === note.id
+          && playbackPosition >= segment.start
+          && playbackPosition < segment.start + segment.duration
+      );
+      if (activeSegment && activeSegment.element) {
+        activeElement = activeSegment.element;
+      }
+    }
+    for (const renderedNote of [
+      ...window.scoreRenderData.notes,
+      ...(window.scoreRenderData.tiedSegments || []),
+    ]) {
       if (renderedNote.element) {
         renderedNote.element.classList.toggle(
           "score-active-note",
@@ -163,8 +190,11 @@
       lastAutoScrollX = position.x;
     }
     const needsVerticalScroll =
-      position.rowTop - viewport.scrollTop < 16
-      || position.rowTop + 118 > viewport.scrollTop + viewport.clientHeight - 16;
+      rowChanged
+      && (
+        position.rowTop - viewport.scrollTop < 16
+        || position.rowTop + 118 > viewport.scrollTop + viewport.clientHeight - 16
+      );
     const needsRowReset = rowChanged && position.x < viewport.scrollLeft;
     const needsHorizontalScroll =
       viewportX > viewport.clientWidth * 0.75
@@ -208,10 +238,13 @@
   }
 
   function updateRangeWarnings() {
+    if (!globalScoreData || !globalScoreData.processed_notes) {
+      return;
+    }
     const adjustedNotes = globalScoreData.processed_notes.filter(
       (note) => note.shifted_up || note.shifted_down
     );
-    const warningButton = document.getElementById("range-warning-open");
+    const warningButtonElement = document.getElementById("range-warning-open");
     const warningAlert = document.getElementById("range-alert");
     const warningCount = document.getElementById("range-alert-count");
     const warningPhraseCount = document.getElementById("range-alert-phrases");
@@ -258,16 +291,19 @@
       adjustedNotes.map((note) => note.phrase_id)
     ).size;
 
-    warningButton.disabled = warningEntries.length === 0;
-    warningButton.textContent = `Range warnings (${warningEntries.length})`;
-    warningAlert.hidden = warningEntries.length === 0;
-    warningCount.textContent = String(adjustedNotes.length);
-    warningPhraseCount.textContent = String(affectedPhrases);
-    adjustedCount.textContent = String(adjustedNotes.length);
-    warningNone.hidden = adjustedNotes.length > 0;
-    detailsNone.hidden = adjustedNotes.length > 0;
+    if (warningButtonElement) {
+      warningButtonElement.disabled = warningEntries.length === 0;
+      warningButtonElement.textContent = `Range warnings (${warningEntries.length})`;
+    }
+    if (warningAlert) warningAlert.hidden = warningEntries.length === 0;
+    if (warningCount) warningCount.textContent = String(adjustedNotes.length);
+    if (warningPhraseCount) warningPhraseCount.textContent = String(affectedPhrases);
+    if (adjustedCount) adjustedCount.textContent = String(adjustedNotes.length);
+    if (warningNone) warningNone.hidden = adjustedNotes.length > 0;
+    if (detailsNone) detailsNone.hidden = adjustedNotes.length > 0;
 
     for (const list of warningLists) {
+      if (!list) continue;
       list.hidden = warningEntries.length === 0;
       list.replaceChildren(...warningEntries.map((entry) => {
         const item = document.createElement("li");
@@ -360,7 +396,7 @@
       ? profile.altissimo_enabled ? 96 : 91
       : 89;
 
-    stopPlayback(true);
+    stopPlayback(false);
     if (note.manual_override) {
       note.pitch = note.range_adjusted_pitch;
       note.manual_override = false;
@@ -381,6 +417,10 @@
       note.manual_override = true;
     }
 
+    const pitchDifference = note.pitch - note.range_adjusted_pitch;
+    note.playbackPitch = typeof note.original_pitch === "number"
+      ? note.original_pitch + pitchDifference
+      : note.pitch;
     note.shifted_up = note.pitch > note.transposed_pitch;
     note.shifted_down = note.pitch < note.transposed_pitch;
     updateRangeWarnings();

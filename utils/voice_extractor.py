@@ -71,6 +71,31 @@ def _normalize_events(
             }
         )
         events.append(normalized)
+
+    events.sort(key=lambda event: (event["start"], event["pitch"]))
+    bridged: list[dict[str, Any]] = []
+    for event in events:
+        if (
+            bridged
+            and bridged[-1]["pitch"] == event["pitch"]
+            and event["start"] - (
+                bridged[-1]["start"] + bridged[-1]["duration"]
+            ) <= 0.060
+        ):
+            bridged[-1]["duration"] = round(
+                max(
+                    bridged[-1]["start"] + bridged[-1]["duration"],
+                    event["start"] + event["duration"],
+                ) - bridged[-1]["start"],
+                6,
+            )
+            bridged[-1]["velocity"] = max(
+                bridged[-1]["velocity"],
+                event["velocity"],
+            )
+        else:
+            bridged.append(event)
+    events = bridged
     return events
 
 
@@ -79,24 +104,32 @@ def _choose_voice(
     previous_pitch: int | None,
     pitch_jump_penalty: float,
 ) -> dict[str, Any]:
-    highest = max(candidates, key=lambda event: (event["pitch"], event["velocity"]))
-    if previous_pitch is None or abs(highest["pitch"] - previous_pitch) <= 14:
-        return highest
-
-    nearby = [
-        event for event in candidates
-        if abs(event["pitch"] - previous_pitch) <= 4
-    ]
-    if nearby:
+    if previous_pitch is None:
         return max(
-            nearby,
+            candidates,
             key=lambda event: (
-                -abs(event["pitch"] - previous_pitch),
-                event["pitch"] - pitch_jump_penalty,
-                event["velocity"],
+                float(event.get("velocity", 0.0)),
+                float(event.get("duration", 0.0)),
+                event["pitch"],
             ),
         )
-    return highest
+
+    def score(event: dict[str, Any]) -> float:
+        distance = abs(event["pitch"] - previous_pitch)
+        continuity = -distance
+        register_distance = abs(event["pitch"] - 69)
+        register = -register_distance / 12.0 if 55 <= event["pitch"] <= 84 else -register_distance / 6.0
+        strength = _velocity_strength(event.get("velocity", 1.0), 0)
+        duration = min(float(event.get("duration", 0.0)), 1.0)
+        return (
+            1.5 * continuity
+            + 0.7 * register
+            + 1.2 * strength
+            + 0.3 * duration
+            - 0.02 * float(pitch_jump_penalty)
+        )
+
+    return max(candidates, key=score)
 
 
 def _append_segment(

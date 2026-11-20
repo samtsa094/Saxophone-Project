@@ -60,7 +60,7 @@ def estimate_key_signature(note_events: list[dict[str, Any]]) -> str | None:
 
     observed_mean = sum(pitch_classes) / 12
     observed = [value - observed_mean for value in pitch_classes]
-    best_correlation = -1.0
+    correlations: list[tuple[float, int]] = []
     best_relative_major = None
 
     for profile, is_minor in ((MAJOR_PROFILE, False), (MINOR_PROFILE, True)):
@@ -79,11 +79,20 @@ def estimate_key_signature(note_events: list[dict[str, Any]]) -> str | None:
                 * sum(value * value for value in centered)
             )
             correlation = numerator / denominator if denominator else 0.0
-            if correlation > best_correlation:
-                best_correlation = correlation
-                best_relative_major = (tonic + 3) % 12 if is_minor else tonic
+            relative_major = (tonic + 3) % 12 if is_minor else tonic
+            correlations.append((correlation, relative_major))
 
-    if best_relative_major is None:
+    correlations.sort(reverse=True)
+    best_correlation, best_relative_major = correlations[0]
+    runner_up_correlation = max(
+        correlation
+        for correlation, tonic in correlations[1:]
+        if tonic != best_relative_major
+    )
+    if (
+        best_correlation < 0.45
+        or best_correlation - runner_up_correlation < 0.08
+    ):
         return None
     return MAJOR_KEY_NAMES[best_relative_major]
 
@@ -111,6 +120,9 @@ def _read_audio_file(
     audio_path: str,
     minimum_frequency: float,
     maximum_frequency: float,
+    onset_threshold: float = 0.5,
+    frame_threshold: float = 0.3,
+    minimum_note_length: float = 127.7,
 ) -> list[dict[str, Any]]:
     import audioread
     import soundfile
@@ -119,6 +131,9 @@ def _read_audio_file(
     try:
         _, midi_data, _ = predict(
             audio_path,
+            onset_threshold=onset_threshold,
+            frame_threshold=frame_threshold,
+            minimum_note_length=minimum_note_length,
             minimum_frequency=minimum_frequency,
             maximum_frequency=maximum_frequency,
         )
@@ -142,7 +157,28 @@ def estimate_bpm(
     if not intervals:
         return default_bpm
 
-    bpm = 60.0 / median(intervals)
+    normalized_intervals = sorted(
+        round(interval, 3) for interval in intervals
+    )
+    clusters: list[list[float]] = []
+    for interval in normalized_intervals:
+        matching = next(
+            (
+                cluster
+                for cluster in clusters
+                if abs(interval - median(cluster)) <= max(0.04, median(cluster) * 0.08)
+            ),
+            None,
+        )
+        if matching is None:
+            clusters.append([interval])
+        else:
+            matching.append(interval)
+
+    strongest = max(clusters, key=lambda cluster: (len(cluster), -median(cluster)))
+    ioi = median(strongest)
+    bpm = 60.0 / ioi
+    bpm = round(bpm * 2.0) / 2.0
     while bpm < 40:
         bpm *= 2
     while bpm > 240:
@@ -156,6 +192,10 @@ def transcribe_audio(
     enable_stem_separation: bool = False,
     minimum_frequency: float = 80.0,
     maximum_frequency: float = 3500.0,
+    genre_style: str = "Classical",
+    onset_threshold: float | None = None,
+    frame_threshold: float | None = None,
+    minimum_note_length: float | None = None,
 ) -> tuple[list[dict[str, Any]], float, str, str | None]:
     """Return raw note events, estimated tempo, source, and an optional notice."""
     if not 0 < minimum_frequency < maximum_frequency:
@@ -178,10 +218,21 @@ def transcribe_audio(
             if extension in MIDI_EXTENSIONS:
                 raw_events = _read_midi_file(audio_path)
             else:
+                if genre_style == "Pop/Rock":
+                    onset_threshold = onset_threshold if onset_threshold is not None else 0.42
+                    frame_threshold = frame_threshold if frame_threshold is not None else 0.26
+                    minimum_note_length = minimum_note_length if minimum_note_length is not None else 110.0
+                else:
+                    onset_threshold = onset_threshold if onset_threshold is not None else 0.58
+                    frame_threshold = frame_threshold if frame_threshold is not None else 0.34
+                    minimum_note_length = minimum_note_length if minimum_note_length is not None else 180.0
                 raw_events = _read_audio_file(
                     transcription_path,
                     minimum_frequency,
                     maximum_frequency,
+                    onset_threshold,
+                    frame_threshold,
+                    minimum_note_length,
                 )
         except ImportError as error:
             LOGGER.info("Optional transcription dependency unavailable: %s", error)

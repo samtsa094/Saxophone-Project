@@ -51,6 +51,18 @@ class VoiceExtractorTests(unittest.TestCase):
         self.assertEqual([note["pitch"] for note in lead], [60])
         self.assertEqual(harmony, [])
 
+    def test_bridges_same_pitch_notes_across_micro_gaps(self) -> None:
+        lead, _harmony = extract_monophonic_skyline(
+            [
+                event(64, 0.0, 0.5),
+                event(64, 0.54, 0.4),
+            ]
+        )
+
+        self.assertEqual(len(lead), 1)
+        self.assertEqual(lead[0]["pitch"], 64)
+        self.assertAlmostEqual(lead[0]["duration"], 0.94)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,28 @@ class AudioProcessorTests(unittest.TestCase):
 
         self.assertEqual(estimate_bpm(events), 120.0)
 
+    def test_bpm_histogram_rejects_syncopated_outlier_clusters(self) -> None:
+        events = [
+            {"start": 0.0},
+            {"start": 0.5},
+            {"start": 1.0},
+            {"start": 1.5},
+            {"start": 2.0},
+            {"start": 3.7},
+        ]
+
+        self.assertEqual(estimate_bpm(events), 120.0)
+
+    def test_bpm_is_rounded_to_a_common_integer_or_half_value(self) -> None:
+        events = [
+            {"start": 0.0},
+            {"start": 60 / 156.2},
+            {"start": 120 / 156.2},
+            {"start": 180 / 156.2},
+        ]
+
+        self.assertEqual(estimate_bpm(events), 156.0)
+
     def test_estimates_transposed_key_from_processed_notes(self) -> None:
         transposed_events = [
             {**event, "pitch": event["pitch"] + 9}
@@ -65,7 +87,14 @@ class AudioProcessorTests(unittest.TestCase):
             )
 
         isolate.assert_called_once()
-        read_audio.assert_called_once_with("filtered.wav", 90.0, 3200.0)
+        read_audio.assert_called_once_with(
+            "filtered.wav",
+            90.0,
+            3200.0,
+            0.58,
+            0.34,
+            180.0,
+        )
         self.assertEqual(len(events), len(DEMO_EVENTS))
         self.assertEqual(source, "transcribed")
         self.assertIn("not full stem separation", notice)

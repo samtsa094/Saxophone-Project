@@ -5,6 +5,7 @@ import os
 import tempfile
 import threading
 import uuid
+from collections import OrderedDict
 from copy import deepcopy
 from typing import Any
 
@@ -82,9 +83,18 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         thread_name_prefix="saxophone-audio",
     )
     state_lock = threading.RLock()
-    sessions: dict[str, dict[str, Any]] = {}
-    jobs: dict[str, dict[str, Any]] = {}
-    audio_cache: dict[str, dict[str, Any]] = {}
+    sessions: OrderedDict[str, dict[str, Any]] = OrderedDict()
+    jobs: OrderedDict[str, dict[str, Any]] = OrderedDict()
+    audio_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
+    max_cache_items = max(1, int(app.config["MAX_CACHE_ITEMS"]))
+
+    def evict_oldest(cache: OrderedDict[str, dict[str, Any]]) -> None:
+        while len(cache) > max_cache_items:
+            cache.popitem(last=False)
+
+    def touch(cache: OrderedDict[str, dict[str, Any]], key: str) -> None:
+        if key in cache:
+            cache.move_to_end(key)
     app.extensions["score_sessions"] = sessions
     app.extensions["audio_jobs"] = jobs
     app.extensions["audio_cache"] = audio_cache
@@ -208,6 +218,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     enable_stem_separation=enable_stem_separation,
                     minimum_frequency=app.config["MINIMUM_FREQUENCY_HZ"],
                     maximum_frequency=app.config["MAXIMUM_FREQUENCY_HZ"],
+                    genre_style=genre_style,
+                    onset_threshold=app.config["ONSET_THRESHOLD"],
+                    frame_threshold=app.config["FRAME_THRESHOLD"],
+                    minimum_note_length=app.config["MINIMUM_NOTE_LENGTH_MS"],
                 )
                 cached_audio = {
                     "events": deepcopy(raw_events),
@@ -217,7 +231,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 }
                 with state_lock:
                     audio_cache[file_hash] = deepcopy(cached_audio)
+                    touch(audio_cache, file_hash)
+                    evict_oldest(audio_cache)
             else:
+                with state_lock:
+                    touch(audio_cache, file_hash)
                 update_job(
                     task_id,
                     progress=55,
@@ -255,6 +273,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     profile["altissimo_enabled"],
                     cached_audio["bpm"],
                     enforce_range=track_id != "all_voices",
+                    quantization_grid="sixteenth" if track_id == "all_voices" else "eighth",
                 )
                 score["key_signature"] = estimate_key_signature(
                     score["processed_notes"]
@@ -290,6 +309,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     "score_data": score_data,
                     "processing_notice": score_data["processing_notice"],
                 }
+                sessions.move_to_end(session_id)
+                while len(sessions) > max_cache_items:
+                    sessions.popitem(last=False)
             update_job(
                 task_id,
                 status="completed",
@@ -390,6 +412,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 "step": "Queued for processing.",
                 "cache_hit": file_hash in audio_cache,
             }
+            jobs.move_to_end(task_id)
+            while len(jobs) > max_cache_items:
+                jobs.popitem(last=False)
 
         executor.submit(
             process_job,
