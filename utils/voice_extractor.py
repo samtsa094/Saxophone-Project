@@ -18,6 +18,31 @@ def _velocity_strength(value: Any, index: int) -> float:
     return float(value) / 127.0 if value > 1 else float(value)
 
 
+def cluster_onsets(
+    note_events: Sequence[dict[str, Any]], window: float = 0.040
+) -> list[dict[str, Any]]:
+    """Align nearly simultaneous note attacks while preserving event data."""
+    if (
+        not isinstance(window, Real)
+        or isinstance(window, bool)
+        or not math.isfinite(window)
+        or window < 0
+    ):
+        raise ValueError("window must be nonnegative.")
+
+    clustered = [dict(event) for event in note_events]
+    clustered.sort(key=lambda event: float(event["start"]))
+    for event in clustered:
+        nearby_starts = [
+            float(other["start"])
+            for other in clustered
+            if abs(float(other["start"]) - float(event["start"])) <= window
+        ]
+        if len(nearby_starts) > 1:
+            event["start"] = round(median(nearby_starts), 6)
+    return clustered
+
+
 def _normalize_events(
     note_events: Sequence[Mapping[str, Any]], min_duration: float
 ) -> list[dict[str, Any]]:
@@ -72,6 +97,7 @@ def _normalize_events(
         )
         events.append(normalized)
 
+    events = cluster_onsets(events)
     events.sort(key=lambda event: (event["start"], event["pitch"]))
     bridged: list[dict[str, Any]] = []
     for event in events:
@@ -103,6 +129,7 @@ def _choose_voice(
     candidates: list[dict[str, Any]],
     previous_pitch: int | None,
     pitch_jump_penalty: float,
+    current_event: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if previous_pitch is None:
         return max(
@@ -121,12 +148,28 @@ def _choose_voice(
         register = -register_distance / 12.0 if 55 <= event["pitch"] <= 84 else -register_distance / 6.0
         strength = _velocity_strength(event.get("velocity", 1.0), 0)
         duration = min(float(event.get("duration", 0.0)), 1.0)
+        inertia = 0.0
+        if (
+            current_event is not None
+            and event["_source_index"] == current_event["_source_index"]
+            and distance <= 7
+        ):
+            inertia = 2.5
+        sustained_penalty = 0.0
+        if (
+            float(event.get("duration", 0.0)) > 1.0
+            and distance <= 7
+            and strength < 0.75
+        ):
+            sustained_penalty = 0.8
         return (
             1.5 * continuity
             + 0.7 * register
             + 1.2 * strength
             + 0.3 * duration
             - 0.02 * float(pitch_jump_penalty)
+            + inertia
+            - sustained_penalty
         )
 
     return max(candidates, key=score)
@@ -195,6 +238,8 @@ def extract_monophonic_skyline(
     harmony: list[dict[str, Any]] = []
     previous_lead_pitch = None
     previous_harmony_pitch = None
+    previous_lead_event = None
+    previous_harmony_event = None
 
     for start, end in zip(boundaries, boundaries[1:]):
         if end <= start:
@@ -207,22 +252,60 @@ def extract_monophonic_skyline(
         if not active:
             continue
 
-        lead_event = _choose_voice(active, previous_lead_pitch, float(pitch_jump_penalty))
+        segment_duration = end - start
+        lead_event = previous_lead_event
+        if (
+            lead_event is not None
+            and not any(
+                event["_source_index"] == lead_event["_source_index"]
+                for event in active
+            )
+        ):
+            lead_event = None
+        if (
+            lead_event is None
+            or segment_duration >= min_duration
+        ):
+            lead_event = _choose_voice(
+                active,
+                previous_lead_pitch,
+                float(pitch_jump_penalty),
+                previous_lead_event,
+            )
         _append_segment(lead, lead_event, start, end)
         previous_lead_pitch = lead_event["pitch"]
+        previous_lead_event = lead_event
 
         secondary = [
             event for event in active
             if event["_source_index"] != lead_event["_source_index"]
         ]
         if secondary:
-            harmony_event = _choose_voice(
-                secondary, previous_harmony_pitch, float(pitch_jump_penalty)
-            )
+            harmony_event = previous_harmony_event
+            if (
+                harmony_event is not None
+                and not any(
+                    event["_source_index"] == harmony_event["_source_index"]
+                    for event in secondary
+                )
+            ):
+                harmony_event = None
+            if (
+                harmony_event is None
+                or segment_duration >= min_duration
+            ):
+                harmony_event = _choose_voice(
+                    secondary,
+                    previous_harmony_pitch,
+                    float(pitch_jump_penalty),
+                    previous_harmony_event,
+                )
             _append_segment(harmony, harmony_event, start, end)
             previous_harmony_pitch = harmony_event["pitch"]
+            previous_harmony_event = harmony_event
         else:
             previous_harmony_pitch = None
+            previous_harmony_event = None
 
     return (
         [

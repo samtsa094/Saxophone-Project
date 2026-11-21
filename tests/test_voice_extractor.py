@@ -1,6 +1,9 @@
 import unittest
 
-from utils.voice_extractor import extract_monophonic_skyline
+from utils.voice_extractor import (
+    cluster_onsets,
+    extract_monophonic_skyline,
+)
 
 
 def event(pitch: int, start: float, duration: float, velocity: float = 0.8) -> dict:
@@ -62,6 +65,34 @@ class VoiceExtractorTests(unittest.TestCase):
         self.assertEqual(len(lead), 1)
         self.assertEqual(lead[0]["pitch"], 64)
         self.assertAlmostEqual(lead[0]["duration"], 0.94)
+
+    def test_clusters_nearly_simultaneous_onsets(self) -> None:
+        clustered = cluster_onsets(
+            [
+                event(60, 0.000, 0.2),
+                event(64, 0.025, 0.2),
+                event(67, 0.040, 0.2),
+                event(72, 1.000, 0.2),
+            ]
+        )
+
+        self.assertAlmostEqual(clustered[0]["start"], 0.025)
+        self.assertAlmostEqual(clustered[1]["start"], 0.025)
+        self.assertAlmostEqual(clustered[2]["start"], 0.025)
+        self.assertAlmostEqual(clustered[3]["start"], 1.000)
+
+    def test_stays_with_active_contour_instead_of_one_slice_overtone(self) -> None:
+        lead, _harmony = extract_monophonic_skyline(
+            [
+                event(64, 0.0, 0.5),
+                event(65, 0.1, 0.02),
+                event(67, 0.1, 0.5),
+            ]
+        )
+
+        pitches = [note["pitch"] for note in lead]
+        self.assertIn(64, pitches)
+        self.assertLess(pitches.count(67), 2)
 
 
 if __name__ == "__main__":
