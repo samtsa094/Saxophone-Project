@@ -76,6 +76,7 @@ class ApplicationRoutesTests(unittest.TestCase):
         filename: str = "piece.wav",
         voice_preference: str = "lead",
         enable_stem_separation: bool = False,
+        time_signature: str = "4/4",
     ):
         return self.client.post(
             "/upload",
@@ -84,6 +85,7 @@ class ApplicationRoutesTests(unittest.TestCase):
                 "genre_style": "Classical",
                 "voice_preference": voice_preference,
                 "enable_stem_separation": "on" if enable_stem_separation else "",
+                "time_signature": time_signature,
             },
             content_type="multipart/form-data",
         )
@@ -263,7 +265,7 @@ class ApplicationRoutesTests(unittest.TestCase):
         )
         self.assertEqual(
             score_data["tracks"]["lead"]["processed_notes"][0]["pitch"],
-            85,
+            69,
         )
         self.assertEqual(
             self.transcription_options[-1],

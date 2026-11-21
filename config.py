@@ -14,5 +14,6 @@ class Config:
     FRAME_THRESHOLD = float(os.environ.get("FRAME_THRESHOLD", "0.3"))
     MINIMUM_NOTE_LENGTH_MS = float(os.environ.get("MINIMUM_NOTE_LENGTH_MS", "127.7"))
     MAX_CACHE_ITEMS = int(os.environ.get("MAX_CACHE_ITEMS", "30"))
+    SUPPORTED_TIME_SIGNATURES = ("4/4", "3/4", "6/8")
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"

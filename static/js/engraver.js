@@ -2,14 +2,19 @@
   const PITCH_CLASSES = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"];
   const DURATION_SLOTS = [
     { slots: 16, vex: "w" },
-    { slots: 12, vex: "hd" },
+    { slots: 12, vex: "h", dotted: true },
     { slots: 8, vex: "h" },
-    { slots: 6, vex: "qd" },
+    { slots: 6, vex: "q", dotted: true },
     { slots: 4, vex: "q" },
-    { slots: 3, vex: "8d" },
+    { slots: 3, vex: "8", dotted: true },
     { slots: 2, vex: "8" },
     { slots: 1, vex: "16" },
   ];
+  const METER_CONFIGS = {
+    "4/4": { measureSlots: 16, beatsPerMeasure: 4 },
+    "3/4": { measureSlots: 12, beatsPerMeasure: 3 },
+    "6/8": { measureSlots: 12, beatsPerMeasure: 2 },
+  };
   const MEASURE_SLOTS = 16;
   const MEASURE_WIDTH = 260;
   const MEASURES_PER_LINE = 4;
@@ -21,11 +26,11 @@
     return `${PITCH_CLASSES[pitchClass]}/${octave}`;
   }
 
-  function appendRestSlots(entries, startSlot, slots) {
+  function appendRestSlots(entries, startSlot, slots, measureSlots = MEASURE_SLOTS) {
     let remaining = slots;
     let cursor = startSlot;
     while (remaining > 0) {
-      const measureRemaining = MEASURE_SLOTS - (cursor % MEASURE_SLOTS);
+      const measureRemaining = measureSlots - (cursor % measureSlots);
       const available = Math.min(remaining, measureRemaining);
       let chunkRemaining = available;
       for (const duration of DURATION_SLOTS) {
@@ -45,11 +50,11 @@
     return cursor;
   }
 
-  function normalizeMeasureEntries(entries, measureCount) {
+  function normalizeMeasureEntries(entries, measureCount, measureSlots = MEASURE_SLOTS) {
     const normalized = [];
     for (let measureIndex = 0; measureIndex < measureCount; measureIndex += 1) {
-      const measureStart = measureIndex * MEASURE_SLOTS;
-      const measureEnd = measureStart + MEASURE_SLOTS;
+      const measureStart = measureIndex * measureSlots;
+      const measureEnd = measureStart + measureSlots;
       let cursor = measureStart;
       const measureEntries = entries
         .filter((entry) => (
@@ -65,7 +70,7 @@
           continue;
         }
         if (entryStart > cursor) {
-          cursor = appendRestSlots(normalized, cursor, entryStart - cursor);
+          cursor = appendRestSlots(normalized, cursor, entryStart - cursor, measureSlots);
         }
 
         const available = entryEnd - cursor;
@@ -78,7 +83,7 @@
       }
 
       if (cursor < measureEnd) {
-        cursor = appendRestSlots(normalized, cursor, measureEnd - cursor);
+        cursor = appendRestSlots(normalized, cursor, measureEnd - cursor, measureSlots);
       }
     }
     return normalized;
@@ -87,6 +92,8 @@
   function makeTimeline(scoreData) {
     const bpm = scoreData.bpm || 120;
     const beatSeconds = 60 / bpm;
+    const meter = METER_CONFIGS[scoreData.time_signature] || METER_CONFIGS["4/4"];
+    const measureSlots = meter.measureSlots;
     const sourceNotes = [...(scoreData.processed_notes || [])].sort(
       (left, right) => left.start - right.start || right.velocity - left.velocity
     );
@@ -106,7 +113,7 @@
         continue;
       }
       if (onsetSlot > cursor) {
-        cursor = appendRestSlots(entries, cursor, onsetSlot - cursor);
+        cursor = appendRestSlots(entries, cursor, onsetSlot - cursor, measureSlots);
       }
 
       let remaining = Math.max(
@@ -115,7 +122,7 @@
       );
       let noteCursor = cursor;
       while (remaining > 0) {
-        const measureRemaining = MEASURE_SLOTS - (noteCursor % MEASURE_SLOTS);
+        const measureRemaining = measureSlots - (noteCursor % measureSlots);
         const available = Math.min(remaining, measureRemaining);
         let chunkRemaining = available;
         for (const duration of DURATION_SLOTS) {
@@ -126,6 +133,7 @@
               startSlot: noteCursor,
               slots: duration.slots,
               vexDuration: duration.vex,
+              dotted: Boolean(duration.dotted),
             });
             noteCursor += duration.slots;
             chunkRemaining -= duration.slots;
@@ -136,18 +144,20 @@
       cursor = noteCursor;
     }
 
-    const measureCount = Math.max(1, Math.ceil(cursor / MEASURE_SLOTS));
-    const endSlot = measureCount * MEASURE_SLOTS;
+    const measureCount = Math.max(1, Math.ceil(cursor / measureSlots));
+    const endSlot = measureCount * measureSlots;
     if (cursor < endSlot) {
-      cursor = appendRestSlots(entries, cursor, endSlot - cursor);
+      cursor = appendRestSlots(entries, cursor, endSlot - cursor, measureSlots);
     }
-    const normalizedEntries = normalizeMeasureEntries(entries, measureCount);
+    const normalizedEntries = normalizeMeasureEntries(entries, measureCount, measureSlots);
     return { entries: normalizedEntries, measureCount, bpm: bpm, beatSeconds };
   }
 
   function makePolyphonicTimeline(scoreData) {
     const bpm = scoreData.bpm || 120;
     const beatSeconds = 60 / bpm;
+    const meter = METER_CONFIGS[scoreData.time_signature] || METER_CONFIGS["4/4"];
+    const measureSlots = meter.measureSlots;
     const sourceNotes = [...(scoreData.processed_notes || [])].sort(
       (left, right) => left.start - right.start || right.velocity - left.velocity
     );
@@ -166,7 +176,7 @@
     for (let index = 0; index < onsets.length; index += 1) {
       const onsetSlot = onsets[index];
       if (onsetSlot > cursor) {
-        cursor = appendRestSlots(entries, cursor, onsetSlot - cursor);
+        cursor = appendRestSlots(entries, cursor, onsetSlot - cursor, measureSlots);
       }
       const notes = groups.get(onsetSlot);
       notes.sort((left, right) => left.pitch - right.pitch);
@@ -181,7 +191,7 @@
       let noteCursor = onsetSlot;
       let remaining = durationSlots;
       while (remaining > 0) {
-        const measureRemaining = MEASURE_SLOTS - (noteCursor % MEASURE_SLOTS);
+        const measureRemaining = measureSlots - (noteCursor % measureSlots);
         const available = Math.min(remaining, measureRemaining);
         let chunkRemaining = available;
         for (const duration of DURATION_SLOTS) {
@@ -192,6 +202,7 @@
               startSlot: noteCursor,
               slots: duration.slots,
               vexDuration: duration.vex,
+              dotted: Boolean(duration.dotted),
             });
             noteCursor += duration.slots;
             chunkRemaining -= duration.slots;
@@ -202,12 +213,12 @@
       cursor = Math.max(cursor, onsetSlot + durationSlots);
     }
 
-    const measureCount = Math.max(1, Math.ceil(cursor / MEASURE_SLOTS));
-    const endSlot = measureCount * MEASURE_SLOTS;
+    const measureCount = Math.max(1, Math.ceil(cursor / measureSlots));
+    const endSlot = measureCount * measureSlots;
     if (cursor < endSlot) {
-      cursor = appendRestSlots(entries, cursor, endSlot - cursor);
+      cursor = appendRestSlots(entries, cursor, endSlot - cursor, measureSlots);
     }
-    const normalizedEntries = normalizeMeasureEntries(entries, measureCount);
+    const normalizedEntries = normalizeMeasureEntries(entries, measureCount, measureSlots);
     return { entries: normalizedEntries, measureCount, bpm, beatSeconds };
   }
 
@@ -227,6 +238,8 @@
     const timeline = scoreData.selected_track === "all_voices"
       ? makePolyphonicTimeline(scoreData)
       : makeTimeline(scoreData);
+    const timeSignature = scoreData.time_signature || "4/4";
+    const measureSlots = (METER_CONFIGS[timeSignature] || METER_CONFIGS["4/4"]).measureSlots;
     const lineCount = Math.ceil(timeline.measureCount / MEASURES_PER_LINE);
     const width =
       16 + Math.min(timeline.measureCount, MEASURES_PER_LINE) * MEASURE_WIDTH;
@@ -244,8 +257,8 @@
     const noteAnchors = [];
 
     for (let measureIndex = 0; measureIndex < timeline.measureCount; measureIndex += 1) {
-      const measureStart = measureIndex * MEASURE_SLOTS;
-      const measureEnd = measureStart + MEASURE_SLOTS;
+      const measureStart = measureIndex * measureSlots;
+      const measureEnd = measureStart + measureSlots;
       const measureInLine = measureIndex % MEASURES_PER_LINE;
       const rowIndex = Math.floor(measureIndex / MEASURES_PER_LINE);
       const staveY = 35 + rowIndex * ROW_HEIGHT;
@@ -257,7 +270,7 @@
       if (measureInLine === 0) {
         stave.addClef("treble");
         if (measureIndex === 0) {
-          stave.addTimeSignature("4/4");
+          stave.addTimeSignature(timeSignature);
         }
         const keySignature = scoreData.key_signature;
         if (keySignature) {
@@ -287,6 +300,9 @@
             duration: entry.vexDuration,
             clef: "treble",
           });
+        if (entry.dotted && typeof vexNote.addDotToAll === "function") {
+          vexNote.addDotToAll();
+        }
         if (
           entry.kind === "note"
           && events.some((event) => event.shifted_up || event.shifted_down)

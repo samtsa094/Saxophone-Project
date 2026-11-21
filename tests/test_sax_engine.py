@@ -96,6 +96,22 @@ class ProcessMelodyDataTests(unittest.TestCase):
         self.assertEqual(processed["start"], 0.125)
         self.assertEqual(processed["duration"], 0.125)
 
+    def test_three_four_measure_length_is_used_for_phrase_grouping(self) -> None:
+        result = process_melody_data(
+            [
+                event(60, start=0.0, duration=1.2),
+                event(62, start=1.4),
+            ],
+            "Alto",
+            "Intermediate",
+            False,
+            bpm=120,
+            time_signature="3/4",
+        )
+
+        self.assertEqual(result["time_signature"], "3/4")
+        self.assertEqual(result["summary_stats"]["phrases_processed"], 1)
+
     def test_summary_counts_notes_shifts_and_warnings(self) -> None:
         result = process_melody_data(
             [event(47), event(60, 0.25), event(62, 0.5), event(64, 0.75)],

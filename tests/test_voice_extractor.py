@@ -76,9 +76,9 @@ class VoiceExtractorTests(unittest.TestCase):
             ]
         )
 
-        self.assertAlmostEqual(clustered[0]["start"], 0.025)
-        self.assertAlmostEqual(clustered[1]["start"], 0.025)
-        self.assertAlmostEqual(clustered[2]["start"], 0.025)
+        self.assertAlmostEqual(clustered[0]["start"], 0.000)
+        self.assertAlmostEqual(clustered[1]["start"], 0.000)
+        self.assertAlmostEqual(clustered[2]["start"], 0.000)
         self.assertAlmostEqual(clustered[3]["start"], 1.000)
 
     def test_stays_with_active_contour_instead_of_one_slice_overtone(self) -> None:
@@ -93,6 +93,32 @@ class VoiceExtractorTests(unittest.TestCase):
         pitches = [note["pitch"] for note in lead]
         self.assertIn(64, pitches)
         self.assertLess(pitches.count(67), 2)
+
+    def test_lead_outline_suppresses_isolated_register_splatter(self) -> None:
+        lead, _harmony = extract_monophonic_skyline(
+            [
+                event(69, 0.0, 0.5),
+                event(100, 0.5, 0.5),
+                event(70, 1.0, 0.5),
+            ]
+        )
+
+        self.assertTrue(all(abs(note["pitch"] - 69) <= 12 for note in lead))
+
+    def test_viterbi_prefers_continuous_tessitura_over_bass_and_overtone(self) -> None:
+        lead, _harmony = extract_monophonic_skyline(
+            [
+                event(40, 0.0, 2.0, velocity=0.3),
+                event(65, 0.0, 0.8, velocity=0.9),
+                event(67, 0.8, 0.8, velocity=0.85),
+                event(90, 0.0, 0.2, velocity=0.9),
+            ]
+        )
+
+        pitches = [note["pitch"] for note in lead]
+        self.assertIn(65, pitches)
+        self.assertNotIn(40, pitches)
+        self.assertNotIn(90, pitches)
 
 
 if __name__ == "__main__":

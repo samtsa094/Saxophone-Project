@@ -190,6 +190,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         genre_style: str,
         voice_preference: str,
         enable_stem_separation: bool,
+        time_signature: str,
     ) -> None:
         try:
             update_job(
@@ -274,6 +275,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     cached_audio["bpm"],
                     enforce_range=track_id != "all_voices",
                     quantization_grid="sixteenth" if track_id == "all_voices" else "eighth",
+                    time_signature=time_signature,
                 )
                 score["key_signature"] = estimate_key_signature(
                     score["processed_notes"]
@@ -297,6 +299,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 "harmony_notes": len(harmony_events),
             }
             score_data["source"] = cached_audio["source"]
+            score_data["time_signature"] = time_signature
             score_data["processing_notice"] = " ".join(processing_notices) or None
 
             update_job(task_id, progress=90, step="Engraving score tracks...")
@@ -373,6 +376,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if voice_preference not in VOICE_PREFERENCES:
             return jsonify(error="Choose a valid voice extraction target."), 400
         enable_stem_separation = request.form.get("enable_stem_separation") == "on"
+        time_signature = request.form.get("time_signature", "4/4")
+        if time_signature not in Config.SUPPORTED_TIME_SIGNATURES:
+            return jsonify(error="Choose a valid time signature."), 400
 
         with tempfile.NamedTemporaryFile(
             dir=app.config["UPLOAD_FOLDER"],
@@ -391,7 +397,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             (
                 f"{digest.hexdigest()}:{int(enable_stem_separation)}:"
                 f"{app.config['MINIMUM_FREQUENCY_HZ']}:"
-                f"{app.config['MAXIMUM_FREQUENCY_HZ']}"
+                f"{app.config['MAXIMUM_FREQUENCY_HZ']}:"
+                f"{time_signature}"
             ).encode("ascii")
         ).hexdigest()
 
@@ -426,6 +433,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             genre_style,
             voice_preference,
             enable_stem_separation,
+            time_signature,
         )
         return (
             jsonify(

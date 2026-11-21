@@ -48,11 +48,22 @@
     const gain = context.createGain();
     const noteStart = Math.max(context.currentTime, startTime);
     const noteEnd = Math.max(noteStart + 0.04, startTime + duration);
+    const lowPitchThreshold = 62;
+    const lowPitchFloor = 44;
+    const lowPitchAmount = Math.max(
+      0,
+      Math.min(
+        1,
+        (lowPitchThreshold - note.playbackPitch)
+          / (lowPitchThreshold - lowPitchFloor)
+      )
+    );
+    const peakGain = 0.12 + lowPitchAmount * 0.68;
     oscillator.type = "sine";
     oscillator.frequency.value = 440 * Math.pow(2, (note.playbackPitch - 69) / 12);
     gain.gain.setValueAtTime(0.0001, noteStart);
-    gain.gain.linearRampToValueAtTime(0.12, noteStart + 0.01);
-    gain.gain.setValueAtTime(0.12, Math.max(noteStart + 0.02, noteEnd - 0.015));
+    gain.gain.linearRampToValueAtTime(peakGain, noteStart + 0.01);
+    gain.gain.setValueAtTime(peakGain, Math.max(noteStart + 0.02, noteEnd - 0.015));
     gain.gain.linearRampToValueAtTime(0.0001, noteEnd);
     oscillator.connect(gain);
     gain.connect(context.destination);

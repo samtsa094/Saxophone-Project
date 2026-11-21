@@ -50,6 +50,7 @@ def process_melody_data(
     bpm: float = 120.0,
     enforce_range: bool = True,
     quantization_grid: str = "eighth",
+    time_signature: str = "4/4",
 ) -> dict[str, Any]:
     """Transpose and quantize notes, optionally applying saxophone range limits."""
     if horn_type not in TRANSPOSITION_SEMITONES:
@@ -62,6 +63,8 @@ def process_melody_data(
         raise TypeError("enforce_range must be a bool.")
     if quantization_grid not in {"eighth", "sixteenth"}:
         raise ValueError("quantization_grid must be 'eighth' or 'sixteenth'.")
+    if time_signature not in {"4/4", "3/4", "6/8"}:
+        raise ValueError("time_signature must be '4/4', '3/4', or '6/8'.")
     if (
         not isinstance(bpm, Real)
         or isinstance(bpm, bool)
@@ -125,7 +128,9 @@ def process_melody_data(
             }
         )
 
-    phrases = _group_phrases(validated_events, 240.0 / float(bpm))
+    measure_beats = 4.0 if time_signature == "4/4" else 3.0
+    measure_seconds = 60.0 / float(bpm) * measure_beats
+    phrases = _group_phrases(validated_events, measure_seconds)
     processed_notes: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     octave_shifts = 0
@@ -259,4 +264,5 @@ def process_melody_data(
         },
         "warnings": warnings,
         "bpm": float(bpm),
+        "time_signature": time_signature,
     }

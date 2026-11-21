@@ -28,6 +28,7 @@
           {{ score_data.summary_stats.total_notes }} notes · {{ score_data.bpm }} BPM
         </p>
         <p id="playback-status" class="muted" role="status" aria-live="polite"></p>
+        <p class="muted">{{ score_data.time_signature or "4/4" }} · {{ score_data.bpm }} BPM</p>
       </div>
       <button id="play-toggle" type="button" aria-pressed="false">Play</button>
       <button id="range-warning-open" type="button" {% if not score_data.warnings %}disabled{% endif %}>
